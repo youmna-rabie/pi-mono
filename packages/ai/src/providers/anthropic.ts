@@ -54,7 +54,12 @@ function getCacheControl(
 	if (retention === "none") {
 		return { retention };
 	}
-	const ttl = retention === "long" && baseUrl.includes("api.anthropic.com") ? "1h" : undefined;
+	// Apply 1h TTL for long retention when using official Anthropic API
+	// (or any custom base URL that includes "api.anthropic.com")
+	const ttl =
+		retention === "long" && baseUrl.includes("api.anthropic.com")
+			? "1h"
+			: undefined;
 	return {
 		retention,
 		cacheControl: { type: "ephemeral", ...(ttl && { ttl }) },
@@ -530,6 +535,9 @@ function createClient(
 	// The beta header is deprecated on Opus 4.6 and redundant on Sonnet 4.6, so skip it.
 	const needsInterleavedBeta = interleavedThinking && !supportsAdaptiveThinking(model.id);
 
+	// Respect ANTHROPIC_BASE_URL environment variable, defaulting to model.baseUrl
+	const baseURL = process.env.ANTHROPIC_BASE_URL || model.baseUrl;
+
 	// Copilot: Bearer auth, selective betas (no fine-grained-tool-streaming)
 	if (model.provider === "github-copilot") {
 		const betaFeatures: string[] = [];
@@ -540,7 +548,7 @@ function createClient(
 		const client = new Anthropic({
 			apiKey: null,
 			authToken: apiKey,
-			baseURL: model.baseUrl,
+			baseURL,
 			dangerouslyAllowBrowser: true,
 			defaultHeaders: mergeHeaders(
 				{
@@ -567,7 +575,7 @@ function createClient(
 		const client = new Anthropic({
 			apiKey: null,
 			authToken: apiKey,
-			baseURL: model.baseUrl,
+			baseURL,
 			dangerouslyAllowBrowser: true,
 			defaultHeaders: mergeHeaders(
 				{
@@ -588,7 +596,7 @@ function createClient(
 	// API key auth
 	const client = new Anthropic({
 		apiKey,
-		baseURL: model.baseUrl,
+		baseURL,
 		dangerouslyAllowBrowser: true,
 		defaultHeaders: mergeHeaders(
 			{
@@ -610,7 +618,8 @@ function buildParams(
 	isOAuthToken: boolean,
 	options?: AnthropicOptions,
 ): MessageCreateParamsStreaming {
-	const { cacheControl } = getCacheControl(model.baseUrl, options?.cacheRetention);
+	const baseURL = process.env.ANTHROPIC_BASE_URL || model.baseUrl;
+	const { cacheControl } = getCacheControl(baseURL, options?.cacheRetention);
 	const params: MessageCreateParamsStreaming = {
 		model: model.id,
 		messages: convertMessages(context.messages, model, isOAuthToken, cacheControl),
