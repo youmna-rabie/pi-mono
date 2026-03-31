@@ -524,6 +524,19 @@ function isOAuthToken(apiKey: string): boolean {
 	return apiKey.includes("sk-ant-oat");
 }
 
+/**
+ * Resolve the base URL for Anthropic API calls.
+ * Prioritizes ANTHROPIC_BASE_URL environment variable, defaulting to model.baseUrl.
+ * Empty or whitespace-only environment variable is treated as unset.
+ */
+function resolveBaseUrl(model: Model<"anthropic-messages">): string {
+	const envBaseUrl = process.env.ANTHROPIC_BASE_URL;
+	if (envBaseUrl && envBaseUrl.trim().length > 0) {
+		return envBaseUrl;
+	}
+	return model.baseUrl;
+}
+
 function createClient(
 	model: Model<"anthropic-messages">,
 	apiKey: string,
@@ -535,8 +548,7 @@ function createClient(
 	// The beta header is deprecated on Opus 4.6 and redundant on Sonnet 4.6, so skip it.
 	const needsInterleavedBeta = interleavedThinking && !supportsAdaptiveThinking(model.id);
 
-	// Respect ANTHROPIC_BASE_URL environment variable, defaulting to model.baseUrl
-	const baseURL = process.env.ANTHROPIC_BASE_URL || model.baseUrl;
+	const baseURL = resolveBaseUrl(model);
 
 	// Copilot: Bearer auth, selective betas (no fine-grained-tool-streaming)
 	if (model.provider === "github-copilot") {
@@ -618,7 +630,7 @@ function buildParams(
 	isOAuthToken: boolean,
 	options?: AnthropicOptions,
 ): MessageCreateParamsStreaming {
-	const baseURL = process.env.ANTHROPIC_BASE_URL || model.baseUrl;
+	const baseURL = resolveBaseUrl(model);
 	const { cacheControl } = getCacheControl(baseURL, options?.cacheRetention);
 	const params: MessageCreateParamsStreaming = {
 		model: model.id,
